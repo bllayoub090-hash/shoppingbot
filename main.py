@@ -1,61 +1,65 @@
-
-from flask import Flask, jsonify, request
 import os
+import re
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# إعدادات معرّفات الشراكة (Store IDs) للأسواق المختلفة
-# يمكنك تعديلها لاحقاً أو سحبها من Environment Variables في Render
-AMAZON_STORES = {
-    "sa": os.environ.get("AMAZON_SA_ID", "shoppingbot-sa-21"),
-    "ae": os.environ.get("AMAZON_AE_ID", "shoppingbot-ae-21"),
-    "eg": os.environ.get("AMAZON_EG_ID", "shoppingbot-eg-21"),
-    "com": os.environ.get("AMAZON_US_ID", "shoppingbot-us-20"),
+# استدعاء المعرفات من متغيرة البيئة أو استخدام قيم افتراضية مؤقتة
+AFFILIATE_TAGS = {
+    'SA': os.getenv('AMAZON_SA_TAG', 'yourtag-sa-21'),
+    'AE': os.getenv('AMAZON_AE_TAG', 'yourtag-ae-21'),
+    'EG': os.getenv('AMAZON_EG_TAG', 'yourtag-eg-21'),
+    'US': os.getenv('AMAZON_US_TAG', 'yourtag-us-20')
 }
 
+def extract_asin(url):
+    """استخراج رقم المنتج (ASIN) من رابط أمازون"""
+    asin_match = re.search(r'/(?:dp|gp/product)/([A-Z0-9]{10})', url)
+    if asin_match:
+        return asin_match.group(1)
+    return None
 
-@app.route("/")
+def generate_affiliate_link(url, region='US'):
+    """إنشاء رابط أفلييت جديد بحقن Store ID الخاص بك"""
+    asin = extract_asin(url)
+    tag = AFFILIATE_TAGS.get(region.upper(), AFFILIATE_TAGS['US'])
+    
+    domain_map = {
+        'SA': 'amazon.sa',
+        'AE': 'amazon.ae',
+        'EG': 'amazon.eg',
+        'US': 'amazon.com'
+    }
+    domain = domain_map.get(region.upper(), 'amazon.com')
+    
+    if asin:
+        return f"https://www.{domain}/dp/{asin}?tag={tag}"
+    return f"{url}?tag={tag}"
+
+@app.route('/', methods=['GET'])
 def home():
-  return jsonify({
-      "status": "online",
-      "message": "Shopping Bot API is active and running 24/7!",
-      "supported_regions": list(AMAZON_STORES.keys()),
-  })
+    return jsonify({
+        "status": "online",
+        "message": "Automated Affiliate Bot is running successfully!"
+    })
 
+@app.route('/convert', methods=['POST'])
+def convert_link():
+    data = request.get_json()
+    if not data or 'url' not in data:
+        return jsonify({"error": "Please provide a valid 'url'"}), 400
+    
+    original_url = data['url']
+    region = data.get('region', 'US')
+    
+    affiliate_url = generate_affiliate_link(original_url, region)
+    
+    return jsonify({
+        "original_url": original_url,
+        "affiliate_url": affiliate_url,
+        "region": region.upper()
+    })
 
-@app.route("/search", methods=["POST"])
-def search_products():
-  data = request.json or {}
-  query = data.get("query", "")
-  region = data.get("region", "sa").lower()
-
-  if not query:
-    return (
-        jsonify({
-            "error": "Please provide a product query (e.g., 'laptop', 'phone')"
-        }),
-        400,
-    )
-
-  # التأكد من دعم الدولة المطلوبة، وإلا فالافتراضية هي السعودية
-  store_id = AMAZON_STORES.get(region, AMAZON_STORES["sa"])
-
-  # محاكاة توليد الروابط الذكية وعمولات الأفلييت (يمكن ربطها بـ API الرسمي لاحقاً)
-  affiliate_links = {
-      "sa": f"https://www.amazon.sa/s?k={query}&tag={AMAZON_STORES['sa']}",
-      "ae": f"https://www.amazon.ae/s?k={query}&tag={AMAZON_STORES['ae']}",
-      "eg": f"https://www.amazon.eg/s?k={query}&tag={AMAZON_STORES['eg']}",
-      "com": f"https://www.amazon.com/s?k={query}&tag={AMAZON_STORES['com']}",
-  }
-
-  return jsonify({
-      "query": query,
-      "selected_region": region,
-      "active_store_id": store_id,
-      "generated_affiliate_links": affiliate_links,
-      "status": "success",
-  })
-
-
-if __name__ == "__main__":
-  app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
