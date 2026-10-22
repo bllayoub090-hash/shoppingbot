@@ -42,7 +42,6 @@ def generate_affiliate_link(url, region='US'):
 def background_auto_engine():
     while True:
         print("[-] المحرك الذاتي يعمل في الخلفية ويقوم بتفقد وتحديث العروض...")
-        # هنا سيقوم البوت لاحقاً بجلب المنتجات ومعالجتها تلقائياً
         time.sleep(3600)  # يكرر العملية كل ساعة تلقائياً
 
 # تشغيل المحرك الذاتي في الخلفية بالتوازي مع سيرفر Flask
@@ -53,8 +52,9 @@ engine_thread.start()
 def home():
     return jsonify({
         "status": "online",
+        "verification_code": "ccd3",
         "mode": "Fully Automated Self-Operating Engine",
-        "message": "Automated Affiliate Bot is running and background engine is active!"
+        "message": "Automated Affiliate Bot is running with code ccd3"
     })
 
 @app.route('/convert', methods=['POST'])
@@ -77,3 +77,4 @@ def convert_link():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
