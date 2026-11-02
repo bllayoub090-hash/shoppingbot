@@ -1,80 +1,80 @@
-import os
-import re
-import time
-import threading
-from flask import Flask, request, jsonify
+import asyncio
+import httpx
+from loguru import logger
+from datetime import datetime
 
-app = Flask(__name__)
+# إعداد ملف تسجيل الأخطاء والعمليات في الخلفية
+logger.add("bot_actions.log", rotation="50 MB", retention="10 days", level="INFO")
 
-# استدعاء المعرفات الخاصة بك من متغيرات البيئة على Render
-AFFILIATE_TAGS = {
-    'SA': os.getenv('AMAZON_SA_TAG', 'yourtag-sa-21'),
-    'AE': os.getenv('AMAZON_AE_TAG', 'yourtag-ae-21'),
-    'EG': os.getenv('AMAZON_EG_TAG', 'yourtag-eg-21'),
-    'US': os.getenv('AMAZON_US_TAG', 'yourtag-us-20')
-}
+class PlatformFetcher:
+    def __init__(self, platform_name: str, country: str, target_url: str):
+        self.platform_name = platform_name
+        self.country = country
+        self.target_url = target_url
 
-def extract_asin(url):
-    """استخراج رقم المنتج (ASIN) من رابط أمازون"""
-    asin_match = re.search(r'/(?:dp|gp/product)/([A-Z0-9]{10})', url)
-    if asin_match:
-        return asin_match.group(1)
-    return None
+    async def fetch(self, client: httpx.AsyncClient):
+        """جلب البيانات بشكل غير متزامن لتوفير الوقت والموارد"""
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "ar-SA,ar;q=0.9,en;q=0.8"
+        }
+        
+        try:
+            logger.info(f"جاري فحص المنصة: {self.platform_name} في {self.country}...")
+            
+            # محاكاة لصفقة تم اصطيادها
+            simulated_deal = {
+                "platform": self.platform_name,
+                "country": self.country,
+                "deal_title": "خصم ترويجي استثنائي",
+                "promo_code": f"GULF-{self.platform_name.upper()}-50",
+                "detected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            return [simulated_deal]
+            
+        except httpx.RequestError as e:
+            logger.error(f"خطأ شبكة في {self.platform_name} ({self.country}): {e}")
+        except Exception as e:
+            logger.error(f"خطأ غير متوقع في {self.platform_name}: {e}")
+            
+        return []
 
-def generate_affiliate_link(url, region='US'):
-    """إنشاء رابط أفلييت بحقن معرفك تلقائياً"""
-    asin = extract_asin(url)
-    tag = AFFILIATE_TAGS.get(region.upper(), AFFILIATE_TAGS['US'])
+async def main_background_loop():
+    logger.info("🚀 تم إقلاع نظام صيد العروض والصفقات في الخلفية بنجاح (24/7).")
     
-    domain_map = {
-        'SA': 'amazon.sa',
-        'AE': 'amazon.ae',
-        'EG': 'amazon.eg',
-        'US': 'amazon.com'
-    }
-    domain = domain_map.get(region.upper(), 'amazon.com')
-    
-    if asin:
-        return f"https://www.{domain}/dp/{asin}?tag={tag}"
-    return f"{url}?tag={tag}"
+    # قائمة المنصات المستهدفة عبر دول الخليج
+    platforms = [
+        # السعودية
+        PlatformFetcher("HungerStation", "Saudi Arabia", "https://api.hungerstation.com/v1/offers"),
+        PlatformFetcher("Jahez", "Saudi Arabia", "https://api.jahez.net/v1/deals"),
+        PlatformFetcher("Mrsool", "Saudi Arabia", "https://api.mrsool.co/v1/promos"),
+        PlatformFetcher("Ninja", "Saudi Arabia", "https://api.ninjadirect.sa/offers"),
+        # الإمارات
+        PlatformFetcher("Talabat", "UAE", "https://api.talabat.com/uae/deals"),
+        PlatformFetcher("Careem", "UAE", "https://api.careem.com/food/offers"),
+        # الكويت
+        PlatformFetcher("Talabat", "Kuwait", "https://api.talabat.com/kuwait/deals"),
+        # قطر
+        PlatformFetcher("Snoonu", "Qatar", "https://api.snoonu.com/v1/offers"),
+    ]
 
-# محرك الخلفية الذاتي (يعمل تلقائياً كل فترة لتحديث وعمل المعالجة الذاتية)
-def background_auto_engine():
+    # دورة العمل المستمرة في الخفاء
     while True:
-        print("[-] المحرك الذاتي يعمل في الخلفية ويقوم بتفقد وتحديث العروض...")
-        time.sleep(3600)  # يكرر العملية كل ساعة تلقائياً
+        async with httpx.AsyncClient(http2=True) as client:
+            tasks = [p.fetch(client) for p in platforms]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, list):
+                    for deal in result:
+                        logger.success(f"🟢 [تم رصد صفقة]: {deal['country']} | {deal['platform']} | الكود: {deal['promo_code']}")
+        
+        logger.info("⏳ انتهاء دورة الفحص الحالية. الانتقال لوضع السكون المؤقت...")
+        await asyncio.sleep(600)
 
-# تشغيل المحرك الذاتي في الخلفية بالتوازي مع سيرفر Flask
-engine_thread = threading.Thread(target=background_auto_engine, daemon=True)
-engine_thread.start()
-
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({
-        "status": "online",
-        "verification_code": "ccd3",
-        "mode": "Fully Automated Self-Operating Engine",
-        "message": "Automated Affiliate Bot is running with code ccd3"
-    })
-
-@app.route('/convert', methods=['POST'])
-def convert_link():
-    data = request.get_json()
-    if not data or 'url' not in data:
-        return jsonify({"error": "Please provide a valid 'url'"}), 400
-    
-    original_url = data['url']
-    region = data.get('region', 'US')
-    
-    affiliate_url = generate_affiliate_link(original_url, region)
-    
-    return jsonify({
-        "original_url": original_url,
-        "affiliate_url": affiliate_url,
-        "region": region.upper()
-    })
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
-
+if __name__ == "__main__":
+    try:
+        asyncio.run(main_background_loop())
+    except KeyboardInterrupt:
+        logger.warning("⚠️ تم إيقاف البوت يدوياً.")
