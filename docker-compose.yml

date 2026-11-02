@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  gulf_deals_bot:
+    build: .
+    container_name: gulf_smart_bot
+    restart: always
+    environment:
+      - TZ=Asia/Riyadh
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
